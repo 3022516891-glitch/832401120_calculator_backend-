@@ -59,13 +59,12 @@ def test_favorites_first_metadata_and_batch_delete(tmp_path, monkeypatch):
     records = get_all_records()
     favorite_id = records[-1]["id"]
     set_favorite(favorite_id, True)
-    update_metadata(favorite_id, "Homework formula", "Useful")
+    update_metadata(favorite_id, "Homework formula")
 
     ordered = get_all_records()
     assert ordered[0]["id"] == favorite_id
     assert ordered[0]["note"] == "Homework formula"
-    assert ordered[0]["tag"] == "Useful"
-    assert get_all_records("Useful")[0]["id"] == favorite_id
+    assert get_all_records("Homework formula")[0]["id"] == favorite_id
 
     delete_ids = [ordered[0]["id"], ordered[1]["id"]]
     assert remove_records(delete_ids) == 2

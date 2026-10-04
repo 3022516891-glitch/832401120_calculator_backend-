@@ -57,8 +57,11 @@ def test_postgres_table_initialization(monkeypatch):
     connection = Mock()
     monkeypatch.setattr(psycopg, "connect", Mock(return_value=connection))
     database.initialize_database()
-    query = connection.execute.call_args.args[0]
+    queries = [call.args[0] for call in connection.execute.call_args_list]
+    query = queries[0]
+    assert "CREATE TABLE IF NOT EXISTS calculation_history" in query
     assert "BIGSERIAL" in query
     assert "angle_mode" in query
-    assert "PRAGMA" not in query
+    assert all("PRAGMA" not in statement for statement in queries)
+    assert any("ADD COLUMN IF NOT EXISTS note" in statement for statement in queries)
     connection.commit.assert_called_once()
