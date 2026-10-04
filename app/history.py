@@ -83,7 +83,7 @@ def remove_record(record_id: int) -> bool:
 
 def update_metadata(record_id: int, note: str, tag: str) -> dict | None:
     with get_connection() as connection:
-        cursor = connection.execute(
+        row = execute_query(connection,
             "UPDATE calculation_history SET note = ?, tag = ? WHERE id = ?",
             (note.strip(), tag.strip(), record_id),
         )
