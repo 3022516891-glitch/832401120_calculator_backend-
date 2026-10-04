@@ -17,10 +17,10 @@ def get_all_records(
     parameters: list[str | int] = []
     if keyword:
         conditions.append(
-            "(expression LIKE ? OR CAST(result AS TEXT) LIKE ? OR note LIKE ? OR tag LIKE ?)"
+            "(expression LIKE ? OR CAST(result AS TEXT) LIKE ? OR note LIKE ?)"
         )
         search_value = f"%{keyword}%"
-        parameters.extend([search_value, search_value, search_value, search_value])
+        parameters.extend([search_value, search_value, search_value])
     if favorite_only:
         conditions.append("is_favorite = 1")
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -33,7 +33,7 @@ def get_all_records(
         query_parameters = parameters + [page_size, (page - 1) * page_size] if page is not None else parameters
         rows = execute_query(connection,
             f"""
-            SELECT id, expression, result, is_favorite, created_at, angle_mode, note, tag
+            SELECT id, expression, result, is_favorite, created_at, angle_mode, note
             FROM calculation_history {where_clause}
             ORDER BY is_favorite DESC, id DESC {limit_clause}
             """,
@@ -63,7 +63,7 @@ def set_favorite(record_id: int, is_favorite: bool) -> dict | None:
             return None
         row = execute_query(connection,
             """
-            SELECT id, expression, result, is_favorite, created_at, angle_mode, note, tag
+            SELECT id, expression, result, is_favorite, created_at, angle_mode, note
             FROM calculation_history WHERE id = ?
             """,
             (record_id,),
@@ -81,17 +81,19 @@ def remove_record(record_id: int) -> bool:
         return cursor.rowcount > 0
 
 
-def update_metadata(record_id: int, note: str, tag: str) -> dict | None:
+def update_metadata(record_id: int, note: str, tag: str | None = None) -> dict | None:
     with get_connection() as connection:
-        row = execute_query(connection,
-            "UPDATE calculation_history SET note = ?, tag = ? WHERE id = ?",
-            (note.strip(), tag.strip(), record_id),
+        assignments = "note = ?" if tag is None else "note = ?, tag = ?"
+        parameters = (note.strip(), record_id) if tag is None else (note.strip(), tag.strip(), record_id)
+        cursor = execute_query(connection,
+            f"UPDATE calculation_history SET {assignments} WHERE id = ?",
+            parameters,
         )
         if cursor.rowcount == 0:
             return None
-        row = connection.execute(
-            """
-            SELECT id, expression, result, is_favorite, created_at, angle_mode, note, tag
+        row = execute_query(connection,
+            f"""
+            SELECT id, expression, result, is_favorite, created_at, angle_mode, note{', tag' if tag is not None else ''}
             FROM calculation_history WHERE id = ?
             """,
             (record_id,),
@@ -105,7 +107,7 @@ def remove_records(record_ids: list[int]) -> int:
     unique_ids = list(dict.fromkeys(record_ids))
     placeholders = ",".join("?" for _ in unique_ids)
     with get_connection() as connection:
-        cursor = connection.execute(
+        cursor = execute_query(connection,
             f"DELETE FROM calculation_history WHERE id IN ({placeholders})",
             unique_ids,
         )
