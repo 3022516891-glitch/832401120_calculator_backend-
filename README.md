@@ -1,171 +1,132 @@
-# Calculator Frontend
+# Calculator Backend
 
-## Vercel Deployment
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment instructions. Set the API base URL in `js/config.js`. Production must use the deployed backend's HTTPS URL rather than `127.0.0.1`. The backend stores production history in external PostgreSQL.
-
-The expandable `Scientific` section is open by default. It supports squares, powers, square roots, reciprocals, log, ln, sin, cos, tan, π, and e. Functions can wrap an existing expression or be selected before entering a value. For example, select sin, enter 30, and press equals to obtain approximately 0.5. Trigonometric calculations use DEG (degrees).
+Scientific calculations support `sqrt`, `log` (base 10), `ln`, `sin`, `cos`, and `tan`; constants `pi` (or π) and `e`; powers; and reciprocals. Requests may specify `angle_mode` as `DEG` or `RAD`, with DEG as the default. History stores the angle mode. For example, `{"expression":"sin(30)","angle_mode":"DEG"}` returns approximately 0.5. Negative square roots, logarithms of nonpositive values, undefined tangents, and division by zero produce explicit errors.
 
 ## Project Information
 
 - Assignment: First Individual Assignment — Calculator with Separate Frontend and Backend
 - Student name: Qiu Yuqi
 - Student ID: 832401120
-- Project type: Web frontend
-- Frontend repository: https://github.com/3022516891-glitch/832401120_calculator_frontend
 - Backend repository: https://github.com/3022516891-glitch/832401120_calculator_backend-
+- Frontend repository: https://github.com/3022516891-glitch/832401120_calculator_frontend
+- Frontend URL: https://832401120calculatorfrontend.vercel.app/
 - Backend URL: https://832401120-calculator-backend-vlaf.vercel.app/
-- Live website: https://832401120calculatorfrontend.vercel.app/
 
 ## Introduction
 
-This frontend uses plain HTML, CSS, and JavaScript to accept expressions, provide calculator buttons, send expressions to the backend, display results and errors, retrieve history, and request deletion of history records.
+The frontend sends the user's original expression to this backend, which validates, parses, and calculates it, then saves successful calculations to a database. Local development uses SQLite by default; setting `DATABASE_URL` enables external PostgreSQL. User input is not executed with `eval()` or `exec()`. Additional features include history search, favorites displayed first, notes, and batch deletion.
 
-The backend handles validation, parsing, final calculation, and persistence. The frontend does not calculate final results independently.
+## Production Deployment
+
+The frontend and backend are separate Vercel projects. Production history persists in external PostgreSQL. See [DEPLOYMENT.md](DEPLOYMENT.md) for configuration, connection, and verification instructions.
 
 ## Technology Stack
 
-- HTML5
-- CSS3
-- JavaScript
-- Fetch API
-- VS Code Live Server
+- Python 3.13
+- FastAPI
+- SQLite (local) / PostgreSQL (production)
+- Pytest
 
-No Vue, React, or npm dependencies are required.
+Local SQLite requires no separate database service. Production uses PostgreSQL for history storage. FastAPI handles request validation and responses. `/docs` provides a custom backend interaction page.
 
 ## Project Structure
 
 ```text
-front_project/
-├── index.html
-├── style.css
-├── js/
-│   ├── api.js
-│   ├── config.js
-│   └── app.js
+back_project/
+├── app/
+│   ├── calculator.py  # Expression parsing and calculation
+│   ├── database.py    # Database connections and initialization
+│   ├── history.py     # History creation, retrieval, and deletion
+│   ├── main.py        # FastAPI application and endpoints
+│   ├── schemas.py     # Request and response models
+│   └── api_guide.html # Backend interaction page
+├── tests/            # Calculation, history, and deployment tests
+├── index.py          # Vercel application entry point
+├── .python-version   # Python version
+├── .env.example      # Example variables without real passwords
+├── .gitignore
+├── .vercelignore
+├── requirements.txt
 ├── DEPLOYMENT.md
 ├── README.md
 └── codestyle.md
 ```
 
-- `index.html`: Calculator and history page structure.
-- `style.css`: Layout, colors, and interaction styles.
-- `js/api.js`: Backend API requests.
-- `js/config.js`: Backend API base URL.
-- `js/app.js`: Button events, calculation requests, and page updates.
-- `codestyle.md`: Coding conventions.
+## Installation and Startup
 
-## Main Features
+For local Windows development, install Python 3.13 and enter the backend directory containing `requirements.txt`. Replace the example path with your actual location after cloning.
 
-### 1. Basic Calculations
+```powershell
+cd "D:\Download_D\软工_个人作业1\back_project"
+python --version
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
 
-Supports addition, subtraction, multiplication, division, decimals, parentheses, unary plus and minus, compound expressions, squares, powers, and square roots. Exponents and results are subject to backend safety limits.
+These commands use the virtual environment's Python directly, without activation, and work in PowerShell and CMD. In CMD, use `cd /d "D:\Download_D\软工_个人作业1\back_project"` when switching drives. Skip creation if a working `.venv` exists. The server runs continuously and does not open a browser automatically. Press Ctrl+C to stop it.
 
-### 2. Calculation History
+After startup, visit:
 
-- Retrieve records from the backend database and display expressions, results, and timestamps.
-- Search expressions, results, or notes.
-- Add or remove favorites and filter favorites.
-- Display favorites before other records.
-- Copy results with one click.
-- Add notes and display them directly in history.
-- Select multiple records on the current page for batch deletion.
-- Delete individual records or clear all history.
-- Browse paginated history and reload it after deletion.
+- Health check: `http://127.0.0.1:8000/api/health`
+- Backend interaction page: `http://127.0.0.1:8000/docs`
 
-### 3. Error Messages
+`/docs` provides calculation, history retrieval, search, favorites, and deletion. It calls backend APIs over HTTP; the backend performs calculations and saves data.
 
-Displays errors for empty or invalid expressions, division by zero, backend connection failures, and failures to load or delete history.
+Without `DATABASE_URL`, the first local startup creates `data/calculator.db`. With `DATABASE_URL`, the application connects to PostgreSQL and initializes the history table. Local and production records are separate and are not migrated automatically. `.env.example` demonstrates the format only; the application does not automatically load `.env` files. Set production credentials in Vercel environment variables, not in the repository.
 
-## Frontend–Backend Communication
-
-The backend's default local development address is `http://127.0.0.1:8000`.
+## API Reference
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| POST | `/api/calculate` | Calculate an expression and save the record |
+| GET | `/api/health` | Check the service and database connection |
+| POST | `/api/calculate` | Calculate and save a record |
 | GET | `/api/history` | Retrieve history |
 | GET | `/api/history?page=1&page_size=10` | Retrieve paginated history |
-| GET | `/api/history?keyword=...` | Search history |
-| GET | `/api/history?favorite_only=true` | Retrieve favorites |
+| GET | `/api/history?keyword=1%2B2` | Search expressions, results, or notes |
+| GET | `/api/history?favorite_only=true` | Retrieve favorites only |
 | PATCH | `/api/history/{id}/favorite` | Add or remove a favorite |
 | PATCH | `/api/history/{id}/metadata` | Update a note |
-| DELETE | `/api/history/batch` | Delete selected records |
+| DELETE | `/api/history/batch` | Delete specified records in a batch |
 | DELETE | `/api/history/{id}` | Delete one record |
-| DELETE | `/api/history` | Clear all history |
+| DELETE | `/api/history` | Delete all history |
 
-Example request:
+Example request: `{"expression": "(1+2)*3"}`
 
-```json
-{"expression": "(1+2)*3"}
+Successful response: `{"success": true, "expression": "(1+2)*3", "result": 9}`
+
+Example error response (original API message preserved): `{"success": false, "message": "除数不能为零"}`. The message means that the divisor cannot be zero.
+
+## Connecting the Frontend and Backend
+
+The backend runs locally at `http://127.0.0.1:8000` by default. Configure the frontend API URL in `js/config.js`. Live Server usually serves the frontend at `http://127.0.0.1:5500`, which is included in the backend's CORS allowed origins.
+
+For local integration, set the frontend API URL to `http://127.0.0.1:8000/api`, start the backend, and open the frontend with Live Server. Production uses the backend's HTTPS URL and the frontend origin configured in `FRONTEND_ORIGINS`. Redeploy after changing environment variables. Origins must not contain `/api` or other paths.
+
+## Scientific Calculations and History Pagination
+
+The API supports `3^2` (square), `2^3` (power), and `sqrt(9)` (square root), combined with basic arithmetic. Exponentiation is right-associative. `-2^2` is -4; `(-2)^2` is 4. Only `sqrt`, `log`, `ln`, `sin`, `cos`, and `tan` are allowed as functions; arbitrary code is not executed. Negative square roots, zero raised to a negative power, exponents with an absolute value greater than 1000, and excessively large results produce errors.
+
+`GET /api/history?page=1&page_size=10` returns `items`, `total`, `page`, and `page_size`. Combine it with `keyword` and `favorite_only` as needed. Omitting `page` returns an array of records.
+
+`DELETE /api/history` deletes all records, including favorites, and returns `success` and `deleted_count`. The frontend requests confirmation. Deletion cannot be undone through the application.
+
+Favorites appear before ordinary records, with the newest records first within each group. Notes support up to 200 characters. Keyword searches match expressions, results, and notes. `DELETE /api/history/batch` accepts `{"ids":[1,2,3]}` and supports up to 100 records per request.
+
+## Tests
+
+After installing dependencies, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Successful response:
+Tests cover precedence, parentheses, decimals, negative numbers, division by zero, invalid expressions, scientific calculations, pagination, favorites, notes, batch deletion, and deployment configuration.
 
-```json
-{"success": true, "expression": "(1+2)*3", "result": 9}
-```
+Unit tests use temporary SQLite databases or mocked PostgreSQL connections. They do not access production data and do not replace real production persistence checks.
 
-Update `js/config.js` if the backend deployment address changes.
+For production verification, calculate `(1+2)*3`, confirm the result is 9, and check history. Refresh the page and redeploy the backend to verify persistence. Use `1/0` for error handling. Test deletion only with records created for testing.
 
-## Runtime Environment
+## Limitations
 
-Recommended: Visual Studio Code, Chrome/Edge/Firefox, the VS Code Live Server extension, and a running backend service.
-
-## Running Locally
-
-### 1. Start the Backend
-
-Follow the backend README to install dependencies and start the service. The default address is `http://127.0.0.1:8000`. Check its status at `http://127.0.0.1:8000/api/health`.
-
-### 2. Start the Frontend
-
-For a local backend, set the URL in `js/config.js` to `http://127.0.0.1:8000/api`. The current configuration points to production; starting a local backend does not switch the connection automatically. Production should use the backend's HTTPS URL with the trailing `/api`.
-
-1. Open the project directory in Visual Studio Code.
-2. Install Live Server.
-3. Right-click `index.html`.
-4. Select `Open with Live Server`.
-5. Open the page in your browser.
-
-Live Server usually serves the page at `http://127.0.0.1:5500`. No `npm install` is needed.
-
-## Usage
-
-1. Enter an expression using the calculator buttons.
-2. Click equals.
-3. The frontend sends the original expression to the backend.
-4. The backend validates and calculates the expression.
-5. The backend saves the successful calculation and returns the result.
-6. The frontend displays the result and refreshes history.
-7. Use the Delete button next to a record to delete it.
-
-## Separation of Frontend and Backend
-
-```text
-User enters an expression
-→ Frontend sends the original expression
-→ Backend validates and parses it
-→ Backend calculates the result
-→ Backend saves the record
-→ Backend returns the result
-→ Frontend displays the result
-```
-
-When connected to a local backend, stopping that backend leaves the page and input buttons available but prevents new calculations. When connected to production, stopping the local service does not affect online calculations.
-
-## Coding Conventions
-
-See `codestyle.md` for coding conventions and reference sources.
-
-## Notes
-
-`x²` squares the current expression, `xʸ` inserts the power operator, and `√x` applies a square root. The backend performs all calculations.
-
-History shows 10 records per page. Use `Previous` and `Next` to navigate. Searching or changing the favorites filter returns to page one. `Clear All` requires confirmation and deletes all records, including favorites.
-
-- Use Live Server instead of opening `index.html` directly.
-- Confirm that the backend is running.
-- The frontend builds expressions and requests results; it does not use `eval()` to calculate them.
-- History is shared by all visitors. Deletions affect others; do not store sensitive information.
-- Verify the production API URL and backend CORS allowed origins after deployment.
+There is no login or user isolation; history is shared by all visitors. Clearing history includes favorites and cannot be undone through the application. This project is an assignment demonstration and should not store sensitive information. Do not publish database passwords or two-factor authentication secrets to GitHub or a blog.
