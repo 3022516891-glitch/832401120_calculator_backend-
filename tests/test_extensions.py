@@ -2,7 +2,14 @@ import pytest
 
 from app import database
 from app.calculator import CalculationError, calculate
-from app.history import add_record, clear_history, get_all_records, set_favorite
+from app.history import (
+    add_record,
+    clear_history,
+    get_all_records,
+    remove_records,
+    set_favorite,
+    update_metadata,
+)
 
 
 @pytest.mark.parametrize(("expression", "expected"), [
@@ -40,3 +47,26 @@ def test_pagination_search_and_clear(tmp_path, monkeypatch):
     assert filtered["items"][0]["is_favorite"] is True
     assert clear_history() == 23
     assert get_all_records(page=1)["total"] == 0
+
+
+def test_favorites_first_metadata_and_batch_delete(tmp_path, monkeypatch):
+    monkeypatch.setattr(database, "DATA_DIRECTORY", tmp_path)
+    monkeypatch.setattr(database, "DATABASE_PATH", tmp_path / "test.db")
+    database.initialize_database()
+    add_record("1+1", 2)
+    add_record("2+2", 4)
+    add_record("3+3", 6)
+    records = get_all_records()
+    favorite_id = records[-1]["id"]
+    set_favorite(favorite_id, True)
+    update_metadata(favorite_id, "Homework formula", "Useful")
+
+    ordered = get_all_records()
+    assert ordered[0]["id"] == favorite_id
+    assert ordered[0]["note"] == "Homework formula"
+    assert ordered[0]["tag"] == "Useful"
+    assert get_all_records("Useful")[0]["id"] == favorite_id
+
+    delete_ids = [ordered[0]["id"], ordered[1]["id"]]
+    assert remove_records(delete_ids) == 2
+    assert len(get_all_records()) == 1

@@ -21,10 +21,21 @@ class HistoryRecord(BaseModel):
     is_favorite: bool
     created_at: datetime
     angle_mode: str = "DEG"
+    note: str = ""
+    tag: str = ""
 
 
 class FavoriteRequest(BaseModel):
     is_favorite: bool
+
+
+class HistoryMetadataRequest(BaseModel):
+    note: str = Field(default="", max_length=200)
+    tag: str = Field(default="", max_length=30)
+
+
+class BatchDeleteRequest(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=100)
 
 
 class HistoryPage(BaseModel):

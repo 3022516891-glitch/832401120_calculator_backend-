@@ -58,9 +58,17 @@ def initialize_database() -> None:
                     result DOUBLE PRECISION NOT NULL,
                     is_favorite INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'),
-                    angle_mode TEXT NOT NULL DEFAULT 'DEG'
+                    angle_mode TEXT NOT NULL DEFAULT 'DEG',
+                    note TEXT NOT NULL DEFAULT '',
+                    tag TEXT NOT NULL DEFAULT ''
                 )
             """)
+            connection.execute(
+                "ALTER TABLE calculation_history ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT ''"
+            )
+            connection.execute(
+                "ALTER TABLE calculation_history ADD COLUMN IF NOT EXISTS tag TEXT NOT NULL DEFAULT ''"
+            )
         return
     DATA_DIRECTORY.mkdir(parents=True, exist_ok=True)
     with get_connection() as connection:
@@ -70,6 +78,8 @@ def initialize_database() -> None:
                 expression TEXT NOT NULL,
                 result REAL NOT NULL,
                 is_favorite INTEGER NOT NULL DEFAULT 0,
+                note TEXT NOT NULL DEFAULT '',
+                tag TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -81,6 +91,14 @@ def initialize_database() -> None:
             connection.execute(
                 "ALTER TABLE calculation_history "
                 "ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0"
+            )
+        if "note" not in columns:
+            connection.execute(
+                "ALTER TABLE calculation_history ADD COLUMN note TEXT NOT NULL DEFAULT ''"
+            )
+        if "tag" not in columns:
+            connection.execute(
+                "ALTER TABLE calculation_history ADD COLUMN tag TEXT NOT NULL DEFAULT ''"
             )
         if "angle_mode" not in columns:
             connection.execute(

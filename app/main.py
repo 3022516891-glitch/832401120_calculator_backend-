@@ -9,11 +9,21 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from app.calculator import CalculationError, calculate
 from app.database import get_connection, initialize_database
-from app.history import add_record, clear_history, get_all_records, remove_record, set_favorite
+from app.history import (
+    add_record,
+    clear_history,
+    get_all_records,
+    remove_record,
+    remove_records,
+    set_favorite,
+    update_metadata,
+)
 from app.schemas import (
     CalculationRequest,
     CalculationResponse,
+    BatchDeleteRequest,
     FavoriteRequest,
+    HistoryMetadataRequest,
     HistoryRecord,
     HistoryPage,
 )
@@ -109,6 +119,11 @@ def delete_all_history() -> dict:
     return {"success": True, "deleted_count": clear_history()}
 
 
+@app.delete("/api/history/batch", summary="Delete Selected", tags=["History"])
+def delete_selected_history(payload: BatchDeleteRequest) -> dict:
+    return {"success": True, "deleted_count": remove_records(payload.ids)}
+
+
 @app.patch(
     "/api/history/{record_id}/favorite",
     response_model=HistoryRecord,
@@ -117,6 +132,19 @@ def delete_all_history() -> dict:
 )
 def update_favorite(record_id: int, payload: FavoriteRequest) -> dict:
     record = set_favorite(record_id, payload.is_favorite)
+    if record is None:
+        raise HTTPException(status_code=404, detail="历史记录不存在")
+    return record
+
+
+@app.patch(
+    "/api/history/{record_id}/metadata",
+    response_model=HistoryRecord,
+    summary="Update Note And Tag",
+    tags=["History"],
+)
+def update_history_metadata(record_id: int, payload: HistoryMetadataRequest) -> dict:
+    record = update_metadata(record_id, payload.note, payload.tag)
     if record is None:
         raise HTTPException(status_code=404, detail="历史记录不存在")
     return record
