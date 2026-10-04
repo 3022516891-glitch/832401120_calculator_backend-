@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculator API</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f5f7fa;
+      color: #1f2937;
+      font: 15px/1.6 Arial, sans-serif;
+    }
+    main {
+      width: min(720px, calc(100% - 32px));
+      margin: 48px auto;
+    }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    header p { margin: 0; color: #64748b; }
+    .card {
+      margin-bottom: 12px;
+      padding: 18px 20px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #fff;
+    }
+    h2 { margin: 0 0 5px; font-size: 18px; }
+    .content { margin: 0; color: #64748b; }
+    .inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 12px;
+    }
+    .label { color: #475569; font-size: 13px; }
+    code {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #3730a3;
+      font: 13px Consolas, monospace;
+    }
+    footer { margin-top: 22px; color: #94a3b8; font-size: 13px; }
+    form, .toolbar, .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input, button { font: inherit; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    input[type="text"], input[type="search"] { flex: 1; min-width: 140px; }
+    button { cursor: pointer; background: #fff; color: #334155; }
+    button.primary { background: #3730a3; border-color: #3730a3; color: #fff; }
+    button:disabled { opacity: .5; cursor: wait; }
+    input[type="checkbox"] { accent-color: #3730a3; }
+    .toolbar { margin: 16px 0; }
+    .record { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid #e2e8f0; }
+    .record-info { min-width: 0; overflow-wrap: anywhere; }
+    time { display: block; color: #64748b; font-size: 12px; }
+    .delete { color: #b91c1c; }
+    .favorite { color: #b45309; }
+    #result { display: block; margin-top: 12px; font-size: 22px; }
+    #message { color: #b91c1c; }
+    :focus-visible { outline: 2px solid #3730a3; outline-offset: 2px; }
+    @media (max-width: 520px) {
+      main { margin: 24px auto; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Calculator API</h1>
+      <p>Calculate and manage your history</p>
+    </header>
+
+    <p id="message" role="alert"></p>
+
+    <section class="card">
+      <h2>Calculate</h2>
+      <p class="content">计算表达式，并将成功结果保存到历史记录。</p>
+      <form id="calculate-form">
+        <input id="expression" type="text" aria-label="Expression" placeholder="e.g. 2^3 + sqrt(9)" maxlength="500" required>
+        <select id="angle-mode" aria-label="Angle mode"><option value="DEG">DEG</option><option value="RAD">RAD</option></select>
+        <button class="primary" type="submit">Calculate</button>
+      </form>
+      <output id="result" aria-live="polite"></output>
+    </section>
+
+    <section class="card">
+      <h2>History</h2>
+      <p class="content">查看全部记录，也可以搜索表达式、结果或只看收藏。</p>
+      <form id="search-form" class="toolbar">
+        <input id="keyword" type="search" aria-label="Search history" placeholder="Search expression or result">
+        <button type="submit">Search</button>
+        <button id="reset" type="button">Reset</button>
+      </form>
+      <div class="toolbar">
+        <label><input id="favorites" type="checkbox"> Favorites only</label>
+        <button id="refresh" type="button">Refresh</button>
+        <button id="clear-all" type="button" class="delete">Clear All</button>
+      </div>
+      <div id="history" aria-live="polite">Loading...</div>
+      <div class="toolbar">
+        <button id="previous" type="button">Previous</button>
+        <span id="page-info"></span>
+        <button id="next" type="button">Next</button>
+      </div>
+    </section>
+
+    <footer>Records and favorites are saved in the backend database.</footer>
+  </main>
+  <script>
+    const element = id => document.getElementById(id);
+    let historyVersion = 0;
+    let page = 1;
+    let pages = 1;
+
+    async function request(path, options = {}) {
+      let response;
+      try {
+        response = await fetch(path, options);
+      } catch {
+        throw new Error("Cannot connect to backend. Please try again.");
+      }
+      if (response.status === 204) return null;
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Request failed.");
+      return data;
+    }
+
+    function action(label, handler, className = "") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.className = className;
+      button.onclick = async () => {
+        button.disabled = true;
+        element("message").textContent = "";
+        try {
+          await handler();
+          await loadHistory();
+        } catch (error) {
+          element("message").textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+      return button;
+    }
+
+    async function loadHistory() {
+      const version = ++historyVersion;
+      const parameters = new URLSearchParams({
+        page,
+        page_size: 10,
+        keyword: element("keyword").value.trim(),
+        favorite_only: element("favorites").checked
+      });
+      try {
+        const data = await request(`/api/history?${parameters}`);
+        if (version !== historyVersion) return;
+        pages = Math.max(1, Math.ceil(data.total / data.page_size));
+        if (page > pages) { page = pages; return loadHistory(); }
+        const records = data.items;
+        element("page-info").textContent = `Page ${page} / ${pages} · ${data.total} records`;
+        element("previous").disabled = page <= 1;
+        element("next").disabled = page >= pages;
+        element("history").replaceChildren();
+        if (!records.length) element("history").textContent = "No records found.";
+        for (const record of records) {
+          const row = document.createElement("div");
+          row.className = "record";
+          const info = document.createElement("div");
+          info.className = "record-info";
+          const text = document.createElement("strong");
+          text.textContent = `${record.expression} = ${record.result}`;
+          const time = document.createElement("time");
+          time.textContent = record.created_at.replace("T", " ");
+          info.append(text, time);
+          const actions = document.createElement("div");
+          actions.className = "actions";
+          actions.append(
+            action(record.is_favorite ? "★ Unfavorite" : "☆ Favorite", () =>
+              request(`/api/history/${record.id}/favorite`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_favorite: !record.is_favorite })
+              }), "favorite"),
+            action("Delete", async () => {
+              if (window.confirm("Delete this record?")) {
+                await request(`/api/history/${record.id}`, { method: "DELETE" });
+              }
+            }, "delete")
+          );
+          row.append(info, actions);
+          element("history").append(row);
+        }
+      } catch (error) {
+        if (version !== historyVersion) return;
+        element("history").textContent = "Unable to load history. Click Refresh to retry.";
+        element("message").textContent = error.message;
+      }
+    }
+
+    element("calculate-form").onsubmit = async event => {
+      event.preventDefault();
+      const button = event.currentTarget.querySelector("button");
+      button.disabled = true;
+      element("message").textContent = "";
+      element("result").textContent = "";
+      try {
+        const data = await request("/api/calculate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ expression: element("expression").value.trim(), angle_mode: element("angle-mode").value })
+        });
+        element("result").textContent = `Result: ${data.result}`;
+        page = 1;
+        await loadHistory();
+      } catch (error) {
+        element("message").textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
+    element("search-form").onsubmit = event => {
+      event.preventDefault();
+      page = 1;
+      loadHistory();
+    };
+    element("reset").onclick = () => {
+      element("keyword").value = "";
+      element("favorites").checked = false;
+      page = 1;
+      loadHistory();
+    };
+    element("favorites").onchange = () => { page = 1; loadHistory(); };
+    element("refresh").onclick = loadHistory;
+    element("previous").onclick = () => { if (page > 1) { page--; loadHistory(); } };
+    element("next").onclick = () => { if (page < pages) { page++; loadHistory(); } };
+    element("clear-all").onclick = async () => {
+      if (!window.confirm("Delete ALL history, including favorites? This cannot be undone.")) return;
+      try {
+        await request("/api/history", { method: "DELETE" });
+        page = 1;
+        await loadHistory();
+      } catch (error) { element("message").textContent = error.message; }
+    };
+    loadHistory();
+  </script>
+</body>
+</html>
