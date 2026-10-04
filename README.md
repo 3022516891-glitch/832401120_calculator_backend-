@@ -71,7 +71,10 @@ uvicorn app.main:app --reload --port 8000
 | GET | `/api/history?keyword=1%2B2` | 按表达式或结果搜索 |
 | GET | `/api/history?favorite_only=true` | 只查询收藏记录 |
 | PATCH | `/api/history/{id}/favorite` | 收藏或取消收藏 |
+| PATCH | `/api/history/{id}/metadata` | 修改记录的备注 |
+| DELETE | `/api/history/batch` | 批量删除指定记录 |
 | DELETE | `/api/history/{id}` | 删除指定记录 |
+| DELETE | `/api/history` | 删除全部历史记录 |
 
 请求示例：`{"expression": "(1+2)*3"}`
 
@@ -94,5 +97,7 @@ uvicorn app.main:app --reload --port 8000
 `GET /api/history?page=1&page_size=10` 返回 `items`、`total`、`page`、`page_size`。可以组合 `keyword` 和 `favorite_only`。不传 `page` 时保留原来的数组响应，兼容旧调用。
 
 `DELETE /api/history` 删除所有历史，包含收藏记录，返回 `success` 和 `deleted_count`。前端操作前会弹出确认框；删除后无法撤销。
+
+历史查询会将收藏记录排在普通记录之前，同组内按最新记录优先排列。每条记录可保存不超过 30 个字符的标签和不超过 200 个字符的备注；关键词搜索会同时匹配表达式、结果、标签和备注。`DELETE /api/history/batch` 接收 `{"ids":[1,2,3]}`，一次最多删除 100 条记录。
 
 运行 `pytest`。测试覆盖优先级、括号、小数、负数、除零和非法表达式。
